@@ -2559,6 +2559,7 @@ parser P(...) {
 }
 ~ End P4Example
 
+In this example the `expand` overlay produces a left-value.
 It is expected that such coding style will make it easier to generate
 efficient implementations on some architectures..
 
