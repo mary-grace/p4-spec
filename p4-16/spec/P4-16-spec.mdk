@@ -2618,6 +2618,7 @@ methodPrototypes
 methodPrototype
     : optAnnotations functionPrototype ';'
     | optAnnotations TYPE_IDENTIFIER '(' parameterList ')' ';' //constructor
+    | optAnnotations ABSTRACT functionPrototype ";"
     ;
 
 typeOrVoid
@@ -2661,6 +2662,30 @@ disambiguate at compile-time which method or function is being called,
 either by the number of arguments or by the names of the arguments,
 when calls are specifying argument names.  Argument type information
 is not used in disambiguating calls.
+
+##### Abstract methods { #sec-abstract-methods }
+
+Typical extern object methods are built-in, and are implemented by the
+target architecture.  P4 programmers can only call such methods.
+
+However, some types of extern objects may provide methods that can be
+implemented by the P4 programmers.  Such methods are described with
+the `abstract` keyword prior to the method definition.  Here is an
+example:
+
+~ Begin P4Example
+extern Balancer {
+    Balancer();
+    // get the number of active flows
+    bit<32> getFlowCount();
+    // return port index used for load-balancing
+    // @param address: IPv4 source address of flow
+    abstract bit<4> on_new_flow(in bit<32> address);
+}
+~ End P4Example
+
+When such an object is instantiated the user has to supply an
+implementation of all the `abstract` methods (see [#sec-instantiating-abstract-methods]).
 
 ### Type specialization { #sec-type-spec }
 
@@ -4443,6 +4468,62 @@ control c(...) {
     apply { ... }
 }
 ~ End P4Example
+
+### Instantiating objects with abstract methods {#sec-instantiating-abstract-methods}
+
+When instantiating an extern type that has `abstract` methods users
+have to supply implementations for all such methods.  This is done using object initializers:
+
+~ Begin P4Grammar
+lvalue:
+    ...
+    | THIS
+
+expression:
+    ...
+    | THIS
+
+instantiation:
+      ...
+      | annotations typeRef "(" argumentList ")" name "=" objInitializer ";"
+      | typeRef "(" argumentList ")" name "=" objInitializer ";"
+
+objInitializer
+    : "{" objDeclarations "}"
+    ;
+
+objDeclarations
+    : /* empty */
+    | objDeclarations objDeclaration
+    ;
+
+objDeclaration
+    : functionDeclaration
+    | instantiation
+    ;
+~ End P4Grammar
+
+The abstract methods can only use the supplied arguments or refer to
+values that are in the top-level scope.  When calling another method
+of the same instance the `this` keyword is used to indicate the
+current object instance:
+
+~ Begin P4Example
+// Instantiate a balancer
+Balancer() b = {  // provide an implementation for the abstract methods
+    bit<4> on_new_flow(in bit<32> address) {
+        // uses the address and the number of flows to load balance
+        bit<32> count = this.getFlowCount();  // call method of the same instance
+        return (address + count)[3:0];
+    }
+}
+~ End P4Example
+
+Abstract methods may be invoked by users explicitly, or they may be
+invoked by the target architecture.  The architectural description has
+to specify when the abstract methods are invoked and what the meaning
+of their arguments and return values is; target architectures may
+impose additional constraints on abstract methods.
 
 ### Restrictions on top-level instantiations
 
@@ -7109,6 +7190,7 @@ The P4 compiler should provide:
 
 ## Summary of changes made in version 1.2.0
 
+* Add description of abstract methods (Section [#sec-abstract-methods]).
 * Constrain `default` label position for `switch` statements.
 * Allow empty tuples.
 * Added `@deprecated` annotation.
@@ -7157,15 +7239,16 @@ The following table shows all P4 reserved keywords. Some identifiers
 are treated as keywords only in specific contexts (e.g., the keyword `actions`).
 
 |:---{width:25%}---|:---{width:25%}---|:---{width:25%}---|:---{width:25%}---|
-| `action`   |  `apply ` | `bit`        | `bool` |
-| `const`    |  `control` | `default` | `else` |
-| `enum`   | `error`     |   `extern`  |  `exit`  |
-| `false`   |  `header`   |  `header_union` | `if`         |
-|  `in`   | `inout` | `int`         | `match_kind` |
-| `package` | `parser` | `out`         | `return`  |
-| `select` | `state` | `struct`   |  `switch` |
-| `table`   | `transition` |  `true` |  `tuple` |
-| `typedef` | `varbit`  | `verify` | `void`       |
+| 'abstract' | `action`   |  `apply ` | `bit`        |
+| `bool`  | `const`    |  `control` | `default` |
+| `else`  | `enum`   | `error`     |   `extern`  |
+| `exit`  | `false`   |  `header`   |  `header_union` |
+| `if`    |   `in`   | `inout` | `int`  |
+| `match_kind` | `package` | `parser` | `out` |
+| `return`  | `select` | `state` | `struct`   |
+|  `switch` | `table`   | `this` | `transition` |
+|  `true` |  `tuple` | `typedef` | `varbit`  |
+| `verify` | `void`   | |
 |------|------|------|------|
 
 # Appendix: P4 reserved annotations { #sec-p4-reserved-annotations }
